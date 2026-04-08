@@ -39,26 +39,11 @@ from openai import OpenAI
 # ---------------------------------------------------------------------------
 # Configuration - Environment Variables
 # ---------------------------------------------------------------------------
-# Use os.environ[] as required by the validator (not os.getenv with defaults)
-# This ensures we use exactly the API_BASE_URL and API_KEY they inject
-try:
-    API_BASE_URL = os.environ["API_BASE_URL"]
-    API_KEY = os.environ["API_KEY"]
-except KeyError:
-    # Fallback for local testing only
-    API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or ""
-    API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
-
+# As per the official example template
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 ENV_BASE_URL = os.getenv("ENV_BASE_URL") or "http://localhost:7860"
-
-if not API_KEY:
-    print(
-        "[ERROR] Missing required environment variable: API_KEY\n"
-        "Please set API_KEY before running.",
-        file=sys.stderr,
-    )
-    sys.exit(1)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -332,11 +317,11 @@ def get_llm_decision(
                 time.sleep(wait_time)
                 continue
             print(f"[DEBUG] LLM error: {exc}", flush=True)
-            break
+            # Re-raise the exception so validator sees API was attempted
+            raise
 
-    # Smart fallback based on task characteristics
-    print(f"[DEBUG] Using intelligent fallback for {task_id}", flush=True)
-    return get_fallback_decision(task_id)
+    # If we get here after all retries, raise an error
+    raise Exception(f"LLM call failed after {max_retries} retries for {task_id}")
 
 
 def get_fallback_decision(task_id: str) -> tuple[str, Optional[str], str]:
@@ -492,8 +477,9 @@ def main() -> None:
     print(f"[INFO] Environment URL: {ENV_BASE_URL}", flush=True)
     print(f"[INFO] API Base URL: {API_BASE_URL}", flush=True)
     
-    # Initialize OpenAI client exactly like the official example
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    # Initialize OpenAI client as validator requires:
+    # "Initialize your OpenAI client with base_url=os.environ["API_BASE_URL"] and api_key=os.environ["API_KEY"]"
+    client = OpenAI(base_url=os.environ["API_BASE_URL"], api_key=os.environ["API_KEY"])
 
     scores: dict[str, float] = {}
     for task_id in TASKS:
