@@ -124,10 +124,12 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
 
 def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     """Log episode end in OpenEnv format."""
+    # Clamp score so :.3f never rounds to 0.000 or 1.000
+    clamped = max(0.001, min(score, 0.999))
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
         f"[END] success={str(success).lower()} steps={steps} "
-        f"score={score:.3f} rewards={rewards_str}",
+        f"score={clamped:.3f} rewards={rewards_str}",
         flush=True,
     )
 
@@ -457,13 +459,13 @@ def run_episode(client: OpenAI, task_id: str) -> float:
         else:
             score = sum(rewards)
 
-        # Clamp to open interval (0, 1) — never exactly 0.0 or 1.0
-        score = max(1e-6, min(score, 1 - 1e-6))
+        # Clamp to strict (0, 1) — validator rejects 0.0 and 1.0
+        score = max(0.001, min(score, 0.999))
         success = score >= SUCCESS_THRESHOLD
 
     except Exception as exc:
         print(f"[DEBUG] Episode error for {task_id}: {exc}", flush=True)
-        score = max(score, 1e-6)
+        score = max(score, 0.001)
 
     finally:
         # [END] MUST always be emitted
