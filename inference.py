@@ -39,7 +39,7 @@ from openai import OpenAI
 # ---------------------------------------------------------------------------
 # Configuration - Environment Variables
 # ---------------------------------------------------------------------------
-# As per the official example template
+# Exactly matching the official sample inference template
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
@@ -451,17 +451,19 @@ def run_episode(client: OpenAI, task_id: str) -> float:
 
         score = min(max(score, 0.0), 1.0)
         success = score >= SUCCESS_THRESHOLD
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
     except requests.RequestException as exc:
+        # Environment HTTP errors - log and return 0
         print(f"[DEBUG] HTTP error communicating with environment: {exc}", flush=True)
-        score = 0.0
-        success = False
+        log_end(success=False, steps=steps_taken, score=0.0, rewards=rewards)
+        return 0.0
     except Exception as exc:
-        print(f"[DEBUG] Episode error: {exc}", flush=True)
-        score = 0.0
-        success = False
-    finally:
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
+        # ALL other errors (including LLM errors) - log and RE-RAISE
+        # This ensures the validator sees that we attempted LLM calls
+        print(f"[ERROR] Episode failed: {exc}", flush=True)
+        log_end(success=False, steps=steps_taken, score=0.0, rewards=rewards)
+        raise
 
     return score
 
@@ -473,13 +475,13 @@ def main() -> None:
     """
     Run inference on all three tasks and report results.
     """
-    print(f"[INFO] Starting Loan Advisor inference with model: {MODEL_NAME}", flush=True)
+    print(f"[INFO] Starting Loan Advisor inference", flush=True)
+    print(f"[INFO] Model: {MODEL_NAME}", flush=True)
     print(f"[INFO] Environment URL: {ENV_BASE_URL}", flush=True)
     print(f"[INFO] API Base URL: {API_BASE_URL}", flush=True)
     
-    # Initialize OpenAI client as validator requires:
-    # "Initialize your OpenAI client with base_url=os.environ["API_BASE_URL"] and api_key=os.environ["API_KEY"]"
-    client = OpenAI(base_url=os.environ["API_BASE_URL"], api_key=os.environ["API_KEY"])
+    # Initialize OpenAI client exactly as in the official sample template
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
     scores: dict[str, float] = {}
     for task_id in TASKS:
