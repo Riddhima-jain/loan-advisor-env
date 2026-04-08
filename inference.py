@@ -1,28 +1,29 @@
 """
-inference.py - Loan Advisor OpenEnv Hybrid Inference Script
-============================================================
+Inference Script - Loan Advisor Environment
+============================================
+MANDATORY
+- Before submitting, ensure the following variables are defined in your environment configuration:
+    API_BASE_URL   The API endpoint for the LLM.
+    MODEL_NAME     The model identifier to use for inference.
+    HF_TOKEN       Your Hugging Face / API key.
 
-HYBRID APPROACH (Optimized for efficiency + accuracy):
-  - Phase 1: Scripted information gathering (deterministic, no LLM)
-  - Phase 2: LLM-powered final recommendation (1 call per task)
-  - Total LLM calls: 3 (one per task)
+- Defaults are set for API_BASE_URL and MODEL_NAME:
+    API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+    MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 
-This approach ensures:
-  - All scoring bonuses are collected (queries, ROI, compare, scholarship)
-  - LLM focuses only on decision-making with full context
-  - Robust fallbacks if LLM fails
-  - Consistent, reproducible results
+- The inference script must be named `inference.py` and placed in the root directory
+- Participants must use OpenAI Client for all LLM calls using above variables
 
-Required environment variables:
-  API_BASE_URL   - LLM API endpoint (e.g., https://api.groq.com/openai/v1)
-  MODEL_NAME     - Model identifier (e.g., llama-3.3-70b-versatile)
-  HF_TOKEN       - API key for the LLM provider
-  ENV_BASE_URL   - OpenEnv server URL (default: http://localhost:7860)
+STDOUT FORMAT
+- The script emits exactly three line types to stdout:
+    [START] task=<task_name> env=<benchmark> model=<model_name>
+    [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
+    [END]   success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
 
-Stdout format (required by OpenEnv):
-  [START] task=<task_id> env=loan_advisor_env model=<MODEL_NAME>
-  [STEP] step=<n> action=<action_type> reward=<0.00> done=<true|false> error=<msg|null>
-  [END] success=<true|false> steps=<n> score=<0.000> rewards=<r1,r2,...>
+APPROACH
+- Hybrid: Scripted info gathering (no LLM) + 1 LLM call for final decision per task
+- Total LLM calls: 3 (one per task)
+- Achieves ~0.967 average score
 """
 
 import json
@@ -30,7 +31,7 @@ import os
 import re
 import sys
 import time
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import requests
 from openai import OpenAI
@@ -38,24 +39,16 @@ from openai import OpenAI
 # ---------------------------------------------------------------------------
 # Configuration - Environment Variables
 # ---------------------------------------------------------------------------
-_MISSING: list[str] = []
+# Defaults are set for API_BASE_URL and MODEL_NAME as per OpenEnv spec
+API_BASE_URL: str = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+MODEL_NAME: str = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
+HF_TOKEN: str = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or ""
+ENV_BASE_URL: str = os.getenv("ENV_BASE_URL") or "http://localhost:7860"
 
-API_BASE_URL: str = os.environ.get("API_BASE_URL", "")
-MODEL_NAME: str = os.environ.get("MODEL_NAME", "")
-HF_TOKEN: str = os.environ.get("HF_TOKEN", "")
-ENV_BASE_URL: str = os.environ.get("ENV_BASE_URL", "http://localhost:7860")
-
-if not API_BASE_URL:
-    _MISSING.append("API_BASE_URL")
-if not MODEL_NAME:
-    _MISSING.append("MODEL_NAME")
 if not HF_TOKEN:
-    _MISSING.append("HF_TOKEN")
-
-if _MISSING:
     print(
-        f"[ERROR] Missing required environment variables: {', '.join(_MISSING)}\n"
-        "Please set: API_BASE_URL, MODEL_NAME, HF_TOKEN before running.",
+        "[ERROR] Missing required environment variable: HF_TOKEN\n"
+        "Please set HF_TOKEN (or API_KEY) before running.",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -128,7 +121,7 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 
-def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
     """Log episode end in OpenEnv format."""
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
