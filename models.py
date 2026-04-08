@@ -7,18 +7,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-# Try openm-core first (official CLI package), then openenv-core, then plain BaseModel
-try:
-    from openm.core.models import Action, Observation  # type: ignore
-except ImportError:
-    try:
-        from openenv.core.models import Action, Observation  # type: ignore
-    except ImportError:
-        Action = BaseModel  # type: ignore
-        Observation = BaseModel  # type: ignore
 
-
-class LoanAdvisorAction(Action):  # type: ignore[misc]
+class LoanAdvisorAction(BaseModel):
     """
     Agent action for the Loan Advisor environment.
 
@@ -93,7 +83,7 @@ class LoanAdvisorAction(Action):  # type: ignore[misc]
         extra = "allow"
 
 
-class LoanAdvisorObservation(Observation):  # type: ignore[misc]
+class LoanAdvisorObservation(BaseModel):
     """
     Observation returned by the Loan Advisor environment after each step.
     """

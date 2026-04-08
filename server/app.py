@@ -49,17 +49,6 @@ app.add_middleware(
 
 env = LoanAdvisorEnvironment()
 
-# Optionally register with openm-core / openenv-core for spec compliance
-try:
-    from openm.core.env_server import register_env  # type: ignore
-    register_env(app, env)
-except Exception:
-    try:
-        from openenv.core.env_server import register_env  # type: ignore
-        register_env(app, env)
-    except Exception:
-        pass  # Not available — direct FastAPI impl is fully sufficient
-
 
 # ---------------------------------------------------------------------------
 # Request / Response models
