@@ -7,7 +7,7 @@ MANDATORY
     MODEL_NAME     The model identifier to use for inference.
     HF_TOKEN       Your Hugging Face / API key.
 
-- Defaults are set for API_BASE_URL and MODEL_NAME:
+- Defaults are set only for API_BASE_URL and MODEL_NAME:
     API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
     MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 
@@ -39,16 +39,16 @@ from openai import OpenAI
 # ---------------------------------------------------------------------------
 # Configuration - Environment Variables
 # ---------------------------------------------------------------------------
-# Defaults are set for API_BASE_URL and MODEL_NAME as per OpenEnv spec
-API_BASE_URL: str = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
-MODEL_NAME: str = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
-HF_TOKEN: str = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or ""
-ENV_BASE_URL: str = os.getenv("ENV_BASE_URL") or "http://localhost:7860"
+# Match the official example: HF_TOKEN or API_KEY for the API key
+API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
+ENV_BASE_URL = os.getenv("ENV_BASE_URL") or "http://localhost:7860"
 
-if not HF_TOKEN:
+if not API_KEY:
     print(
-        "[ERROR] Missing required environment variable: HF_TOKEN\n"
-        "Please set HF_TOKEN (or API_KEY) before running.",
+        "[ERROR] Missing required environment variable: HF_TOKEN or API_KEY\n"
+        "Please set HF_TOKEN or API_KEY before running.",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -483,8 +483,10 @@ def main() -> None:
     """
     print(f"[INFO] Starting Loan Advisor inference with model: {MODEL_NAME}", flush=True)
     print(f"[INFO] Environment URL: {ENV_BASE_URL}", flush=True)
+    print(f"[INFO] API Base URL: {API_BASE_URL}", flush=True)
     
-    client = OpenAI(api_key=HF_TOKEN, base_url=API_BASE_URL)
+    # Initialize OpenAI client exactly like the official example
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 
     scores: dict[str, float] = {}
     for task_id in TASKS:
