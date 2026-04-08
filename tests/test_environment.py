@@ -441,7 +441,7 @@ class TestGradingDeterminism:
         assert score1 == score2
 
     def test_scores_in_0_1_range(self, env):
-        """All possible outcomes should produce scores in [0.0, 1.0]."""
+        """All possible outcomes should produce scores strictly in (0, 1)."""
         for task_id in TASK_ORDER:
             for decision in ["go", "no_go"]:
                 for loan_id in [None, "loan_A", "loan_B"]:
@@ -452,7 +452,7 @@ class TestGradingDeterminism:
                         recommended_loan_id=loan_id,
                         reasoning="Test",
                     ))
-                    assert 0.0 <= reward <= 1.0, f"Score {reward} out of range for {task_id}/{decision}/{loan_id}"
+                    assert 0.0 < reward < 1.0, f"Score {reward} out of range for {task_id}/{decision}/{loan_id}"
 
 
 # ---------------------------------------------------------------------------

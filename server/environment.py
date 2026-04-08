@@ -854,7 +854,7 @@ class LoanAdvisorEnvironment(_ENV_BASE):  # type: ignore[misc]
 
     def _grade(self, state: LoanAdvisorState) -> float:
         """
-        Deterministic grader. Returns float in [0.0, 1.0].
+        Deterministic grader. Returns float in (0.0, 1.0) exclusive.
 
         Correct decision + correct loan (if applicable):
           base = 0.60
@@ -907,7 +907,8 @@ class LoanAdvisorEnvironment(_ENV_BASE):  # type: ignore[misc]
         else:
             score = process_bonus(full=False)
 
-        return min(1.0, max(0.0, score))
+        # Clamp to (0, 1) exclusive — validator rejects exactly 0.0 or 1.0
+        return min(0.999, max(0.001, score))
 
     # ------------------------------------------------------------------
     # Helpers
