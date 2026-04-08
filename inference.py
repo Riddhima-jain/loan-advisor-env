@@ -3,9 +3,10 @@ Inference Script - Loan Advisor Environment
 ============================================
 MANDATORY
 - Before submitting, ensure the following variables are defined in your environment configuration:
-    API_BASE_URL   The API endpoint for the LLM.
-    MODEL_NAME     The model identifier to use for inference.
-    HF_TOKEN       Your Hugging Face / API key.
+    API_BASE_URL       The API endpoint for the LLM.
+    MODEL_NAME         The model identifier to use for inference.
+    HF_TOKEN           Your Hugging Face / API key.
+    IMAGE_NAME         (optional) Docker image name if using from_docker_image()
 
 - Defaults are set only for API_BASE_URL and MODEL_NAME:
     API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
@@ -26,6 +27,7 @@ APPROACH
 - Achieves ~0.967 average score
 """
 
+import asyncio
 import json
 import os
 import re
@@ -33,24 +35,31 @@ import sys
 import time
 from typing import Any, List, Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import requests
 from openai import OpenAI
 
+from models import LoanAdvisorAction
+from client import LoanAdvisorEnv
+
 # ---------------------------------------------------------------------------
-# Configuration - Environment Variables
+# Configuration
 # ---------------------------------------------------------------------------
-# Exactly matching the official sample inference template
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+IMAGE_NAME   = os.getenv("IMAGE_NAME")
+API_KEY      = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
+
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
-MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
+MODEL_NAME   = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 ENV_BASE_URL = os.getenv("ENV_BASE_URL") or "http://localhost:7860"
+BENCHMARK    = os.getenv("LOAN_ADVISOR_BENCHMARK", "loan_advisor_env")
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-ENV_NAME = "loan_advisor_env"
 SUCCESS_THRESHOLD = 0.5
-TEMPERATURE = 0.2  # Low for consistency, but not 0 to allow some flexibility
+TEMPERATURE = 0.2
 MAX_TOKENS = 512
 
 TASKS = ["task_easy", "task_medium", "task_hard"]
@@ -290,6 +299,7 @@ def get_llm_decision(
                 ],
                 temperature=TEMPERATURE,
                 max_tokens=MAX_TOKENS,
+                stream=False,
             )
             raw = (completion.choices[0].message.content or "").strip()
             
@@ -372,7 +382,7 @@ def run_episode(client: OpenAI, task_id: str) -> float:
     Returns:
         Final score for this episode (0.0 to 1.0)
     """
-    log_start(task=task_id, env=ENV_NAME, model=MODEL_NAME)
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
     rewards: list[float] = []
     steps_taken: int = 0
@@ -380,53 +390,53 @@ def run_episode(client: OpenAI, task_id: str) -> float:
     success: bool = False
     gathered_results: list[str] = []
     obs: dict[str, Any] = {}
+    done: bool = False
+    task_description: str = ""
+    student_profile: str = ""
+    available_loans: list[str] = []
 
     try:
-        # Initialize episode
-        obs = env_reset(task_id)
-        task_description = obs.get("task_description", "")
-        student_profile = obs.get("student_profile_summary", "")
-        available_loans = obs.get("available_loan_ids", [])
+        # ── Phase 1: Scripted Information Gathering (No LLM) ──
+        try:
+            obs = env_reset(task_id)
+            task_description = obs.get("task_description", "")
+            student_profile = obs.get("student_profile_summary", "")
+            available_loans = obs.get("available_loan_ids", [])
 
-        # =================================================================
-        # PHASE 1: Scripted Information Gathering (No LLM)
-        # =================================================================
-        scripted = SCRIPTED_ACTIONS.get(task_id, SCRIPTED_ACTIONS["task_easy"])
-        
-        for action in scripted:
-            # Dynamically adjust compare action to use actual available loans
-            if action["action_type"] == "compare" and len(available_loans) >= 2:
-                action = {"action_type": "compare", "loan_ids": available_loans[:2]}
-            
-            obs, reward, done, info = env_step(action)
-            steps_taken += 1
-            rewards.append(reward)
-            
-            action_type = action["action_type"]
-            log_step(step=steps_taken, action=action_type, reward=reward, done=done, error=None)
-            
-            # Collect results for LLM context with better formatting
-            action_result = obs.get("action_result", "")
-            query_field = action.get("query_field", action.get("calculation_type", ""))
-            gathered_results.append(f"=== {action_type.upper()}: {query_field} ===\n{action_result}")
-            
-            if done:
-                break
+            scripted = SCRIPTED_ACTIONS.get(task_id, SCRIPTED_ACTIONS["task_easy"])
+            for action in scripted:
+                if action["action_type"] == "compare" and len(available_loans) >= 2:
+                    action = {"action_type": "compare", "loan_ids": available_loans[:2]}
+                
+                obs, reward, done, info = env_step(action)
+                steps_taken += 1
+                rewards.append(reward)
+                
+                action_type = action["action_type"]
+                log_step(step=steps_taken, action=action_type, reward=reward, done=done, error=None)
+                
+                action_result = obs.get("action_result", "")
+                query_field = action.get("query_field", action.get("calculation_type", ""))
+                gathered_results.append(f"=== {action_type.upper()}: {query_field} ===\n{action_result}")
+                
+                if done:
+                    break
+        except Exception as exc:
+            print(f"[DEBUG] Environment error during info gathering: {exc}", flush=True)
 
-        # =================================================================
-        # PHASE 2: LLM Decision Making (1 call)
-        # =================================================================
+        # ── Phase 2: LLM Decision Making (1 call) — MUST succeed ──
+        gathered_info = "\n\n".join(gathered_results) if gathered_results else "No information gathered."
+        decision, loan_id, reasoning = get_llm_decision(
+            client, task_id,
+            task_description if task_description else f"Loan decision for {task_id}",
+            student_profile if student_profile else "Student seeking education loan",
+            gathered_info,
+        )
+        print(f"[DEBUG] LLM Decision for {task_id}: {decision}" +
+              (f" with {loan_id}" if loan_id else ""), flush=True)
+
+        # ── Phase 3: Submit recommendation to environment ──
         if not done:
-            gathered_info = "\n\n".join(gathered_results)
-            decision, loan_id, reasoning = get_llm_decision(
-                client, task_id, task_description, student_profile, gathered_info
-            )
-            
-            # Debug: Show what decision was made
-            print(f"[DEBUG] LLM Decision for {task_id}: {decision}" + 
-                  (f" with {loan_id}" if loan_id else ""), flush=True)
-            print(f"[DEBUG] Reasoning: {reasoning[:100]}..." if len(reasoning) > 100 else f"[DEBUG] Reasoning: {reasoning}", flush=True)
-
             recommend_action: dict[str, Any] = {
                 "action_type": "recommend",
                 "recommended_decision": decision,
@@ -440,30 +450,24 @@ def run_episode(client: OpenAI, task_id: str) -> float:
             rewards.append(reward)
             log_step(step=steps_taken, action="recommend", reward=reward, done=done, error=None)
 
-        # =================================================================
-        # Score Calculation
-        # =================================================================
+        # ── Score ──
         final_reward = obs.get("final_reward")
         if final_reward is not None:
             score = float(final_reward)
         else:
             score = sum(rewards)
 
-        score = min(max(score, 0.0), 1.0)
+        # Clamp to open interval (0, 1) — never exactly 0.0 or 1.0
+        score = max(1e-6, min(score, 1 - 1e-6))
         success = score >= SUCCESS_THRESHOLD
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
-    except requests.RequestException as exc:
-        # Environment HTTP errors - log and return 0
-        print(f"[DEBUG] HTTP error communicating with environment: {exc}", flush=True)
-        log_end(success=False, steps=steps_taken, score=0.0, rewards=rewards)
-        return 0.0
     except Exception as exc:
-        # ALL other errors (including LLM errors) - log and RE-RAISE
-        # This ensures the validator sees that we attempted LLM calls
-        print(f"[ERROR] Episode failed: {exc}", flush=True)
-        log_end(success=False, steps=steps_taken, score=0.0, rewards=rewards)
-        raise
+        print(f"[DEBUG] Episode error for {task_id}: {exc}", flush=True)
+        score = max(score, 1e-6)
+
+    finally:
+        # [END] MUST always be emitted
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
     return score
 
@@ -472,41 +476,9 @@ def run_episode(client: OpenAI, task_id: str) -> float:
 # Main Entry Point
 # ---------------------------------------------------------------------------
 def main() -> None:
-    """
-    Run inference on all three tasks and report results.
-    """
-    print(f"[INFO] Starting Loan Advisor inference", flush=True)
-    print(f"[INFO] Model: {MODEL_NAME}", flush=True)
-    print(f"[INFO] Environment URL: {ENV_BASE_URL}", flush=True)
-    print(f"[INFO] API Base URL: {API_BASE_URL}", flush=True)
-    
-    # Initialize OpenAI client exactly as in the official sample template
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-
-    scores: dict[str, float] = {}
     for task_id in TASKS:
-        score = run_episode(client, task_id)
-        scores[task_id] = score
-
-    # Summary report
-    print("\n" + "=" * 50)
-    print("HYBRID BASELINE SUMMARY")
-    print("=" * 50)
-    
-    all_passed = True
-    for task_id, score in scores.items():
-        passed = score >= SUCCESS_THRESHOLD
-        status = "✓ PASS" if passed else "✗ FAIL"
-        print(f"{status}  {task_id}: score={score:.3f}")
-        if not passed:
-            all_passed = False
-    
-    avg = sum(scores.values()) / len(scores) if scores else 0.0
-    print("-" * 50)
-    print(f"Average Score: {avg:.3f}")
-    print(f"Overall: {'ALL PASSED' if all_passed else 'SOME FAILED'}")
-    print(f"LLM Calls: {len(TASKS)} total (1 per task)")
-    print("=" * 50)
+        run_episode(client, task_id)
 
 
 if __name__ == "__main__":
