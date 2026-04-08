@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LoanAdvisorAction(BaseModel):
@@ -79,8 +79,7 @@ class LoanAdvisorAction(BaseModel):
         description="Agent's explanation for the recommendation (used in partial reward scoring).",
     )
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class LoanAdvisorObservation(BaseModel):
@@ -116,8 +115,7 @@ class LoanAdvisorObservation(BaseModel):
         ),
     )
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class LoanAdvisorState(BaseModel):

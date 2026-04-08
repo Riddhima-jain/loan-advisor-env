@@ -17,7 +17,8 @@ EXPOSE 7860
 ENV HOST=0.0.0.0
 ENV PORT=7860
 ENV WORKERS=2
-# Enable Gradio web UI for manual testing at /web (localhost:7860/web)
-ENV ENABLE_WEB_INTERFACE=true
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:7860/health || exit 1
 
 CMD uvicorn server.app:app --host $HOST --port $PORT --workers $WORKERS

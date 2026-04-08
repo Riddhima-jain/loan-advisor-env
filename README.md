@@ -15,7 +15,32 @@ tags:
 
 # 🎓 Loan Advisor Environment
 
-An OpenEnv-compatible RL environment for education loan decision-making. AI agents evaluate whether a student should take a loan and recommend the optimal financing option.
+An OpenEnv-compatible RL environment for education loan decision-making. AI agents evaluate whether a student should take an education loan and recommend the optimal financing option.
+
+## 🌍 Why This Matters
+
+**Over 10 million Indian students** apply for education loans each year (RBI data, 2024). Poor loan choices — wrong interest rate, ignoring scholarships, or pursuing low-ROI degrees — can trap families in debt for decades. Most students and parents lack the financial literacy to evaluate complex trade-offs between tuition costs, expected salary growth, EMI affordability, and opportunity costs.
+
+This environment lets you **train and benchmark AI agents** on realistic education loan scenarios, from clear positive-ROI cases (IIT CS) to deceptive negative-ROI traps (expensive arts degrees with bond scholarships). Every data point — tuition fees, salary ranges, loan rates — is sourced from real Indian institutions and published salary surveys.
+
+**Use cases:**
+- Benchmark LLM financial reasoning capabilities
+- Train RL agents for multi-step financial advisory
+- Evaluate agent decision quality on high-stakes, multi-factor problems
+- Test robustness against deceptive options (bond scholarship traps)
+
+## 📊 Data Sources
+
+All financial data is sourced from publicly available, verifiable sources:
+
+| Data Type | Source | Year |
+|-----------|--------|------|
+| IIT Bombay fees | IIT Bombay fee structure website | 2024-25 |
+| Private B-school fees | Shiksha.com MBA fee survey | 2024 |
+| Symbiosis Design fees | Symbiosis International fee structure | 2024-25 |
+| Placement salaries | NIRF Placement Reports, AmbitionBox | 2024 |
+| Job market data | LinkedIn Salary Insights (India) | 2024 |
+| Loan interest rates | SBI, HDFC Credila, Axis Bank (RBI guidelines) | 2024-25 |
 
 ## 🚀 Quick Start
 
@@ -96,23 +121,39 @@ Education loan decisions are high-stakes, multi-factor problems that millions of
 | Field | Type | Description |
 |-------|------|-------------|
 | `action_type` | `query_info` / `compare` / `calculate` / `recommend` | Type of action |
-| `query_field` | string | For `query_info`: `loan_products`, `salary_outlook`, `user_profile`, `scholarship_options` |
+| `query_field` | string | For `query_info`: `tuition_fees`, `loan_products`, `salary_outlook`, `user_profile`, `scholarship_options` |
 | `loan_ids` | list | For `compare`: two loan IDs to compare |
-| `calculation_type` | string | For `calculate`: `roi`, `emi`, `affordability` |
+| `calculation_type` | string | For `calculate`: `roi`, `emi`, `total_cost`, `affordability`, `net_benefit` |
 | `recommended_decision` | `go` / `no_go` | For `recommend` |
 | `recommended_loan_id` | string | For `recommend` with `go`: best loan product |
+| `reasoning` | string | Agent's explanation for the recommendation |
 
 ---
 
 ## Reward Function
 
-- **Base score**: 0.60 for correct decision (GO/NO-GO)
-- **Loan bonus**: +0.20 for selecting optimal loan (when GO)
-- **Process bonuses** (up to +0.20):
-  - +0.05 for ≥3 information queries
-  - +0.05 for calculating ROI
-  - +0.05 for comparing loans
-  - +0.05 for querying scholarships (medium/hard tasks)
+Shaped reward with **partial progress signals** during info gathering, plus a **deterministic grader** on the final recommendation.
+
+### Step Rewards (during research phase)
+| Action | Reward | Condition |
+|--------|--------|-----------|
+| `query_info` | +0.05 | Per unique query field (up to 5 fields) |
+| `calculate` | +0.08 | Per unique calculation type |
+| `compare` | +0.10 | First comparison |
+
+### Final Grading (on `recommend` action)
+
+| Scenario | Base Score | Process Bonuses | Max |
+|----------|-----------|-----------------|-----|
+| Correct decision + correct loan | 0.60 | up to +0.40 | **1.00** |
+| Correct decision + wrong loan | 0.40 | up to +0.30 | ~0.70 |
+| Wrong decision | 0.00 | up to +0.30 | 0.30 |
+
+**Process bonuses** (each +0.10):
+- ✅ Comparison done
+- ✅ ROI calculated
+- ✅ ≥3 unique queries made
+- ✅ Scholarship queried (medium/hard tasks only)
 
 ---
 
@@ -121,15 +162,26 @@ Education loan decisions are high-stakes, multi-factor problems that millions of
 ```
 loan-advisor-env/
 ├── inference.py          # Main inference script (MANDATORY)
-├── models.py             # Pydantic models (Action, Observation)
-├── client.py             # Python client
+├── models.py             # Pydantic models (Action, Observation, State)
+├── client.py             # Python client (OpenEnv + fallback HTTP)
 ├── openenv.yaml          # OpenEnv manifest
-├── pyproject.toml        # Package config
+├── pyproject.toml        # Package config & dependencies
 ├── Dockerfile            # Container definition (port 7860)
+├── tests/
+│   └── test_environment.py   # 54 tests covering all actions, grading, boundaries
 └── server/
-    ├── app.py            # FastAPI server
-    ├── environment.py    # Core logic & grading
-    └── requirements.txt  # Dependencies
+    ├── app.py            # FastAPI server (6 endpoints)
+    ├── environment.py    # Core logic, financial calculations & grading
+    └── requirements.txt  # Server dependencies
+```
+
+## 🧪 Tests
+
+54 tests covering environment reset, all action types, grading logic, financial calculation accuracy, episode boundaries, deterministic reproducibility, observation structure, close/cleanup, task-specific mechanics (3-loan medium task, bond scholarship trap), and score ranges.
+
+```bash
+pip install pytest
+python -m pytest tests/ -v
 ```
 
 ---

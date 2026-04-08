@@ -75,7 +75,7 @@ reward:
 
 
 sdk: docker
-hf_space: "<your-username>/loan-advisor-env"
+hf_space: "RiddhimaJ/loan-advisor-env"
 
 
 observation_space:

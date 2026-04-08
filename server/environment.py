@@ -558,6 +558,10 @@ class LoanAdvisorEnvironment(_ENV_BASE):  # type: ignore[misc]
             return {"status": "not_started"}
         return self._state.model_dump()
 
+    def close(self) -> None:
+        """Clean up environment resources and reset state."""
+        self._state = None
+
     # ------------------------------------------------------------------
     # Action Handlers
     # ------------------------------------------------------------------
