@@ -151,3 +151,15 @@ async def list_tasks() -> dict:
             for i, tid in enumerate(TASK_ORDER)
         ]
     }
+
+
+def main():
+    """Entry point for running the server."""
+    import uvicorn
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "7860"))
+    uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+    main()
