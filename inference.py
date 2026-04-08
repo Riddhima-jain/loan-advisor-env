@@ -39,16 +39,23 @@ from openai import OpenAI
 # ---------------------------------------------------------------------------
 # Configuration - Environment Variables
 # ---------------------------------------------------------------------------
-# Match the official example: HF_TOKEN or API_KEY for the API key
-API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
-API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+# Use os.environ[] as required by the validator (not os.getenv with defaults)
+# This ensures we use exactly the API_BASE_URL and API_KEY they inject
+try:
+    API_BASE_URL = os.environ["API_BASE_URL"]
+    API_KEY = os.environ["API_KEY"]
+except KeyError:
+    # Fallback for local testing only
+    API_KEY = os.getenv("HF_TOKEN") or os.getenv("API_KEY") or ""
+    API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+
 MODEL_NAME = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 ENV_BASE_URL = os.getenv("ENV_BASE_URL") or "http://localhost:7860"
 
 if not API_KEY:
     print(
-        "[ERROR] Missing required environment variable: HF_TOKEN or API_KEY\n"
-        "Please set HF_TOKEN or API_KEY before running.",
+        "[ERROR] Missing required environment variable: API_KEY\n"
+        "Please set API_KEY before running.",
         file=sys.stderr,
     )
     sys.exit(1)
