@@ -19,7 +19,7 @@ An OpenEnv-compatible RL environment for education loan decision-making. AI agen
 
 ## 🚀 Quick Start
 
-\`\`\`bash
+```bash
 # Install & start server
 pip install -e .
 python server/app.py &
@@ -31,7 +31,7 @@ export HF_TOKEN="your_hf_token"
 
 # Run inference
 python inference.py
-\`\`\`
+```
 
 ## 📊 Baseline Scores
 
@@ -46,14 +46,26 @@ python inference.py
 
 ---
 
+## Environment Overview
+
+**Why this problem?**  
+Education loan decisions are high-stakes, multi-factor problems that millions of students face. This environment trains agents to reason through trade-offs between tuition costs, expected salary growth, and loan affordability.
+
+**What the agent does:**
+- Queries tuition fees, salary outlook, and loan products
+- Calculates ROI, EMI, and affordability
+- Makes a GO/NO-GO recommendation with loan selection
+
+---
+
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| \`API_BASE_URL\` | LLM API endpoint | \`https://router.huggingface.co/v1\` |
-| \`MODEL_NAME\` | Model identifier | \`Qwen/Qwen2.5-72B-Instruct\` |
-| \`HF_TOKEN\` | API key (required) | - |
-| \`ENV_BASE_URL\` | Environment server URL | \`http://localhost:7860\` |
+| `API_BASE_URL` | LLM API endpoint | `https://router.huggingface.co/v1` |
+| `MODEL_NAME` | Model identifier | `Qwen/Qwen2.5-72B-Instruct` |
+| `HF_TOKEN` | API key (required) | - |
+| `ENV_BASE_URL` | Environment server URL | `http://localhost:7860` |
 
 ---
 
@@ -61,9 +73,9 @@ python inference.py
 
 | Task ID | Difficulty | Correct Decision | Description |
 |---------|------------|------------------|-------------|
-| \`task_easy\` | Easy | GO + loan_A | IIT Bombay B.Tech CS - clear positive ROI |
-| \`task_medium\` | Medium | GO + loan_A | MBA with scholarship - borderline ROI |
-| \`task_hard\` | Hard | NO-GO | Arts degree - negative ROI, bond scholarship trap |
+| `task_easy` | Easy | GO + loan_A | IIT Bombay B.Tech CS - clear positive ROI |
+| `task_medium` | Medium | GO + loan_A | MBA with scholarship - borderline ROI |
+| `task_hard` | Hard | NO-GO | Arts degree - negative ROI, bond scholarship trap |
 
 ---
 
@@ -71,40 +83,24 @@ python inference.py
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| \`/reset\` | POST | Start new episode |
-| \`/step\` | POST | Execute action |
-| \`/state\` | GET | Get current state |
-| \`/tasks\` | GET | List available tasks |
-| \`/health\` | GET | Health check |
+| `/reset` | POST | Start new episode (`{"task_id": "task_easy"}`) |
+| `/step` | POST | Execute action |
+| `/state` | GET | Get current state |
+| `/tasks` | GET | List available tasks |
+| `/health` | GET | Health check |
 
 ---
 
-## Project Structure
+## Action Space
 
-\`\`\`
-loan-advisor-env/
-├── inference.py          # Main inference script (MANDATORY)
-├── models.py             # Pydantic models (Action, Observation)
-├── client.py             # Python client
-├── openenv.yaml          # OpenEnv manifest
-├── pyproject.toml        # Package config
-├── Dockerfile            # Container definition (port 7860)
-└── server/
-    ├── app.py            # FastAPI server
-    ├── environment.py    # Core logic & grading
-    └── requirements.txt  # Dependencies
-\`\`\`
-
----
-
-## Inference Approach
-
-**Hybrid Strategy** (scripted info gathering + LLM decision):
-
-1. **Phase 1** (No LLM): Query loan products, scholarships, salary outlook, user profile → Calculate ROI → Compare loans
-2. **Phase 2** (1 LLM call): Make final GO/NO-GO recommendation with loan selection
-
-This achieves 96.7% average score with only 3 LLM calls total.
+| Field | Type | Description |
+|-------|------|-------------|
+| `action_type` | `query_info` / `compare` / `calculate` / `recommend` | Type of action |
+| `query_field` | string | For `query_info`: `loan_products`, `salary_outlook`, `user_profile`, `scholarship_options` |
+| `loan_ids` | list | For `compare`: two loan IDs to compare |
+| `calculation_type` | string | For `calculate`: `roi`, `emi`, `affordability` |
+| `recommended_decision` | `go` / `no_go` | For `recommend` |
+| `recommended_loan_id` | string | For `recommend` with `go`: best loan product |
 
 ---
 
@@ -117,6 +113,35 @@ This achieves 96.7% average score with only 3 LLM calls total.
   - +0.05 for calculating ROI
   - +0.05 for comparing loans
   - +0.05 for querying scholarships (medium/hard tasks)
+
+---
+
+## Project Structure
+
+```
+loan-advisor-env/
+├── inference.py          # Main inference script (MANDATORY)
+├── models.py             # Pydantic models (Action, Observation)
+├── client.py             # Python client
+├── openenv.yaml          # OpenEnv manifest
+├── pyproject.toml        # Package config
+├── Dockerfile            # Container definition (port 7860)
+└── server/
+    ├── app.py            # FastAPI server
+    ├── environment.py    # Core logic & grading
+    └── requirements.txt  # Dependencies
+```
+
+---
+
+## Inference Approach
+
+**Hybrid Strategy** (scripted info gathering + LLM decision):
+
+1. **Phase 1** (No LLM): Query loan products, scholarships, salary outlook, user profile → Calculate ROI → Compare loans
+2. **Phase 2** (1 LLM call): Make final GO/NO-GO recommendation with loan selection
+
+This achieves **96.7% average score** with only **3 LLM calls** total.
 
 ---
 
