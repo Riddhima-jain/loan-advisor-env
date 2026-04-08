@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "loan-advisor-env"
+version = "1.0.0"
+description = "OpenEnv environment for education loan decision-making agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["openenv", "rl-environment", "finance", "education", "loan", "india"]
+
+dependencies = [
+    # "openm-core>=0.2.0",  # TODO: Install from source or private index
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pydantic>=2.0.0",
+    "websockets>=12.0",
+    "httpx>=0.25.0",
+    "openai>=1.0.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx>=0.25.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["loan_advisor_env*", "server*"]
+
+[tool.setuptools.package-data]
+"*" = ["openenv.yaml", "*.md"]

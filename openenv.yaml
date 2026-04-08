@@ -1,0 +1,103 @@
+name: loan_advisor_env
+version: "1.0.0"
+description: >
+  RL environment for education loan decision-making. AI agents learn to evaluate
+  whether a student should take a loan (Go / No-go) and select the optimal loan
+  product based on realistic course tuition costs, post-graduation salary outlook,
+  and monthly affordability constraints.
+
+
+  Data sources: Tuition fees are based on publicly available information from
+  institution websites (IIT Bombay, Symbiosis International) and aggregator
+  platforms (Shiksha, Collegedunia). Salary benchmarks are sourced from
+  NIRF placement reports, AmbitionBox, and LinkedIn Salary Insights (India).
+  Loan rates are based on published RBI guidelines and bank websites
+  (SBI, HDFC Credila, Axis Bank) as of 2024-25.
+
+
+  Initial tasks target Indian consumers (INR). Architecture is globally
+  extensible — non-INR tasks (USD, EUR, GBP) can be added to the TASKS dict
+  without any code changes.
+
+
+tags:
+  - finance
+  - education
+  - real-world
+  - india
+  - roi
+  - openenv
+  - loan-advisory
+
+
+tasks:
+  - id: task_easy
+    name: "IIT CS Degree — Clear ROI Case"
+    difficulty: easy
+    max_steps: 8
+    description: >
+      Rahul wants a B.Tech CS at IIT Bombay (₹8L total fees). High-salary field
+      (₹15L/yr avg). Agent must decide to GO and pick loan_A (SBI 8.5%, lowest rate).
+
+
+  - id: task_medium
+    name: "Mid-Tier MBA — Borderline ROI with Scholarship"
+    difficulty: medium
+    max_steps: 10
+    description: >
+      Divya earns ₹40K/month, wants MBA at private B-school (₹20L fees).
+      Modest salary increment. ₹5L scholarship available. Agent must identify
+      scholarship + recommend GO + loan_A (SBI with scholarship = best ROI).
+
+
+  - id: task_hard
+    name: "Arts Degree — Negative ROI / No-Go Case"
+    difficulty: hard
+    max_steps: 12
+    description: >
+      Meera earns ₹30K/month, supports 2 dependents. Wants BFA + Film Studies
+      (₹25L fees). Post-grad arts salary below current income. Bond scholarship
+      has opportunity cost. Agent must evaluate full picture and recommend NO-GO.
+
+
+reward:
+  range: [0.0, 1.0]
+  shaped: true
+  description: >
+    Shaped reward with partial progress signals:
+    - 0.05 per new unique query_info action (up to 5 fields)
+    - 0.08 per new unique calculation
+    - 0.10 for first comparison
+    Final grader on recommend action:
+    - Correct Go/No-go + correct loan: 0.60 base + up to 0.40 process bonus = max 1.0
+    - Correct Go/No-go + wrong loan: 0.40 base + process bonuses
+    - Wrong decision: 0–0.30 partial credit based on research quality
+
+
+sdk: docker
+hf_space: "<your-username>/loan-advisor-env"
+
+
+observation_space:
+  type: structured
+  fields:
+    - task_id: str
+    - task_description: str
+    - action_result: str
+    - student_profile_summary: str
+    - course_university: str
+    - available_loan_ids: list[str]
+    - steps_taken: int
+    - max_steps: int
+    - episode_done: bool
+    - final_reward: float | null
+    - correct_answer: str | null
+
+
+action_space:
+  type: structured
+  action_types:
+    - query_info: ["tuition_fees", "user_profile", "salary_outlook", "loan_products", "scholarship_options"]
+    - calculate: ["emi", "total_cost", "roi", "affordability", "net_benefit"]
+    - compare: "list of loan_ids"
+    - recommend: "go|no_go + optional loan_id + reasoning"
